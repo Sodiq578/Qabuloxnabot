@@ -1543,4 +1543,4 @@ bot.on('polling_error', (error) => {
 
 // Start bot
 logger.info("✅ Bot started...");
-console.log(chalk.green("✅ Bot started..."));
+console.log(chalk.green("✅ Bot started"));
