@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2025-06-03T18:31:21.366Z",
+    "action": "Bot started",
+    "userId": "system",
+    "details": {}
+  },
+  {
+    "timestamp": "2025-06-03T18:32:03.795Z",
+    "action": "Complaint started",
+    "userId": 5838205785,
+    "details": {}
+  }
+]
