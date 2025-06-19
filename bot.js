@@ -7,26 +7,26 @@ const cron = require('node-cron');
 const sqlite3 = require('sqlite3').verbose();
 const chalk = require('chalk');
 
-// Bot configuration
+// Bot sozlamalari
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID);
 const GROUP_ID = parseInt(process.env.GROUP_ID);
 
 if (!BOT_TOKEN || !ADMIN_ID || !GROUP_ID) {
-  console.error(chalk.red('🚫 .env file is missing BOT_TOKEN, ADMIN_ID, or GROUP_ID!'));
+  console.error(chalk.red('🚫 .env faylida BOT_TOKEN, ADMIN_ID yoki GROUP_ID yo‘q!'));
   process.exit(1);
 }
 
-// Initialize bot
+// Botni ishga tushirish
 const bot = new TelegramBot(BOT_TOKEN, { polling: { autoStart: false } });
 
-// Database setup
+// Ma'lumotlar bazasi sozlamalari
 const db = new sqlite3.Database('complaints.db', (err) => {
-  if (err) logger.error('🚫 Database connection error:', err);
-  else logger.info('✅ Connected to database');
+  if (err) logger.error('🚫 Ma\'lumotlar bazasiga ulanishda xato:', err);
+  else logger.info('✅ Ma\'lumotlar bazasiga ulandi');
 });
 
-// Create tables
+// Jadvalarni yaratish
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS complaints (
@@ -36,6 +36,7 @@ db.serialize(() => {
       full_name TEXT,
       address TEXT,
       phone TEXT,
+      passport TEXT,
       section TEXT,
       summary TEXT,
       status TEXT,
@@ -72,7 +73,7 @@ db.serialize(() => {
   `);
 });
 
-// Logger setup
+// Logger sozlamalari
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -85,31 +86,11 @@ const logger = winston.createLogger({
   ]
 });
 
-// User states and data
+// Foydalanuvchi holatlari va ma'lumotlari
 const userSteps = {};
 const userData = {};
 
-// Offensive words list
-const BAD_WORDS = [
-  // O'zbek tilidagi haqorat va so‘kinish so‘zlari
-  "ahmoq", "jinni", "tentak", "johil", "yaramas", "harom", "haromi", "noshud",
-  "it", "itvachcha", "kal", "kalla", "pastkash", "nol", "gandon", "shayton", "shaytonvachcha",
-  "g‘irt", "g‘irt tentak", "aniq axmoq", "befoyda", "yaroqsiz",  
-     "besharm", "besharmcha", "sovuq", "yebsan", "ye", "axmoq", "kaltak",
-  "sik", "sikki", "sikkina", "sikaman", "sikildim", "sikdir", "siktir", "sikvoy", "qot", "qotib qol",
-  "bos", "bosib ket", "sikay", "sikadi", "sikadiyam", "sikka", "sikdirish", "siktir", "eb", "ebsan",
-  "jeb", "jebsan", "jebsang", "jebvor", "em", "emchak", "emchakvoy", "sikvoy", "sikuvor", "piss", "pissa",
-  "fuck", "fuck you", "shit", "ass", "asshole",
-
-  // Rus tilidagi haqorat va so‘kinish so‘zlari
-  "дурак", "идиот", "тупой", "сволочь", "мудак", "ублюдок", "сука",
-  "блядь", "хуй", "пизда", "ебан", "ебаный", "гондон", "залупа",
-  "пидор", "пидорас", "нахуй", "ебать", "ебался", "ёб", "ёбана", 
-  "еблан", "мразь", "уебище", "хуесос", "жопа", "жополиз", "бля", "блят", 
-  "соси", "чмо", "даун", "шалава", "пошел нахуй", "нах", "нахер", "нахрен"
-];
-
-// Language settings
+// Til sozlamalari
 const languages = {
   uz: {
     askName: "📝 Ism-familiyangizni yozing (masalan: Ali Valiev):",
@@ -118,13 +99,15 @@ const languages = {
     invalidAddress: "🚫 Iltimos, manzilingizni to‘g‘ri yozing (3 harfdan ko‘p).",
     askPhone: "📞 Telefon raqamingizni yozing (masalan: +998901234567):",
     invalidPhone: "🚫 Raqam +998 bilan boshlanib, 9 ta raqam bo‘lsin.",
+    askPassport: "📑 Pasport seriya va raqamingizni yozing (masalan: AA1234567):",
+    invalidPassport: "🚫 Pasport seriya va raqamini to‘g‘ri kiriting (masalan: AA1234567).",
     askSection: "📂 Murojaatingiz bo‘limini tanlang:",
     askSummary: "📋 Murojaatingizni qisqacha yozing:",
     invalidSummary: "🚫 Iltimos, 5 harfdan ko‘p yozing.",
     askMedia: "📸 Rasm yoki video yuboring yoki 'Tayyor' tugmasini bosing:",
     mediaReceived: "✅ Fayl qabul qilindi! Yana yuborasizmi yoki 'Tayyor'?",
     invalidMedia: "🚫 Faqat rasm yoki video yuboring yoki 'Tayyor'ni bosing.",
-    confirm: "📝 Ma'lumotlarni tekshiring:\n\n👤 Ism: %s\n🏠 Manzil: %s\n📞 Telefon: %s\n📂 Bo‘lim: %s\n📋 Murojaat: %s\n📸 Fayllar: %s\n\nHammasi to‘g‘rimi?",
+    confirm: "📝 Ma'lumotlarni tekshiring:\n\n👤 Ism: %s\n🏠 Manzil: %s\n📞 Telefon: %s\n📑 Pasport: %s\n📂 Bo‘lim: %s\n📋 Murojaat: %s\n📸 Fayllar: %s\n\nHammasi to‘g‘rimi?",
     success: "✅ Murojaatingiz muvaffaqiyatli qabul qilindi! ID: %s\n\n📌 Murojaatingiz O‘zbekiston Respublikasi Prezidentining Virtual va Xalq qabulxonalariga murojaatlar bilan ishlash tartibiga asosan ko‘rib chiqiladi.\n\n⏰ Murojaatingiz qonuniy tartibda 15-30 ish kuni ichida Oltinsoy tumani sektor rahbarlari yoki mas’ul tashkilotlar tomonidan ko‘rib chiqiladi va sizga javob taqdim etiladi.\n\n📞 Zarurat tug‘ilganda, qo‘shimcha ma’lumot yoki aniqlik kiritish uchun siz bilan bog‘lanish mumkin.\n\n🤝 Diqqat va ishonchingiz uchun rahmat! Oltinsoy tumani Xalq qabulxonasi sizga yordam berishga tayyor.",
     rateLimit: "⏳ 1 daqiqa kuting, xabarlar ko‘p bo‘ldi.",
     adminDashboard: "📊 Admin paneli:\n\n📬 Jami: %s\n⏳ Kutilyapti: %s\n🔄 Jarayonda: %s\n✅ Yakunlangan: %s",
@@ -142,7 +125,6 @@ const languages = {
     broadcastPrompt: "📢 Admin nomidan xabar yozing:",
     broadcastSuccess: "✅ Xabar barcha foydalanuvchilarga va guruhga yuborildi!",
     broadcastError: "🚫 Xabar yuborishda xato yuz berdi.",
-    offensiveWarning: "⚠️ Xabaringizda noqabul so'zlar mavjud. Iltimos, adabiy til ishlating!",
     blockedUser: "🚫 Siz ushbu botdan foydalanish huquqidan mahrum qilindingiz!",
     deleteSuccess: "✅ Murojaat #%s o'chirildi!",
     replySent: "✅ Javob #%s murojaatiga yuborildi!",
@@ -164,13 +146,15 @@ const languages = {
     invalidAddress: "🚫 Пожалуйста, введите адрес правильно (более 3 символов).",
     askPhone: "📞 Введите номер телефона (например: +998901234567):",
     invalidPhone: "🚫 Номер должен начинаться с +998 и содержать 9 цифр.",
+    askPassport: "📑 Введите серию и номер паспорта (например: AA1234567):",
+    invalidPassport: "🚫 Пожалуйста, введите серию и номер паспорта правильно (например: AA1234567).",
     askSection: "📂 Выберите раздел вашего обращения:",
     askSummary: "📋 Кратко опишите ваше обращение:",
     invalidSummary: "🚫 Пожалуйста, введите более 5 символов.",
     askMedia: "📸 Отправьте фото или видео или нажмите 'Готово':",
     mediaReceived: "✅ Файл получен! Отправить еще или нажать 'Готово'?",
     invalidMedia: "🚫 Отправляйте только фото или видео или нажмите 'Готово'.",
-    confirm: "📝 Проверьте данные:\n\n👤 Имя: %s\n🏠 Адрес: %s\n📞 Телефон: %s\n📂 Раздел: %s\n📋 Обращение: %s\n📸 Файлы: %s\n\nВсе верно?",
+    confirm: "📝 Проверьте данные:\n\n👤 Имя: %s\n🏠 Адрес: %s\n📞 Телефон: %s\n📑 Паспорт: %s\n📂 Раздел: %s\n📋 Обращение: %s\n📸 Файлы: %s\n\nВсе верно?",
     success: "✅ Ваше обращение успешно принято! ID: %s\n⏰ Обращение будет рассмотрено в течение 15-30 рабочих дней.",
     rateLimit: "⏳ Подождите 1 минуту, слишком много сообщений.",
     adminDashboard: "📊 Панель администратора:\n\n📬 Всего: %s\n⏳ В ожидании: %s\n🔄 В процессе: %s\n✅ Завершено: %s",
@@ -184,11 +168,10 @@ const languages = {
     editComplaint: "✏️ Введите новый текст обращения:",
     editSuccess: "✅ Обращение #%s изменено!",
     exportReport: "📥 Загрузить отчет",
-    invalidStatusId: "🚫 Используйте формат /status <appe appeal_id> <status> (Pending, In Progress, Resolved)",
+    invalidStatusId: "🚫 Используйте формат /status <appeal_id> <status> (Pending, In Progress, Resolved)",
     broadcastPrompt: "📢 Введите сообщение от имени администратора:",
     broadcastSuccess: "✅ Сообщение отправлено всем пользователям и группе!",
     broadcastError: "🚫 Ошибка при отправке сообщения.",
-    offensiveWarning: "⚠️ В вашем сообщении содержатся недопустимые слова. Пожалуйста, используйте корректный язык!",
     blockedUser: "🚫 Вы заблокированы и не можете использовать этого бота!",
     deleteSuccess: "✅ Обращение #%s удалено!",
     replySent: "✅ Ответ отправлен для обращения #%s!",
@@ -205,7 +188,7 @@ const languages = {
   }
 };
 
-// Sections
+// Bo‘limlar
 const sections = {
   "🛣 Yo‘l qurilishi": "Yo‘l qurilishi",
   "🏫 Ta‘lim": "Ta‘lim",
@@ -226,7 +209,7 @@ const sections = {
   "📌 Boshqa soha": "Boshqa soha"
 };
 
-// Animations
+// Animatsiyalar
 const ANIMATIONS = {
   welcome: 'CAACAgIAAxkBAAIBT2Yp3z5k8z5X5J5z5X5TaACAAd2qwEAAX5X5J5z5X5J5z5X5J5AAQ',
   success: 'CAACAgIAAxkBAAIBU2Yp4AABBWZ5X5J5z5X5J5z5X5J5AAQACAAd2qwEAAX5X5J5z5X5J5z5X5J5AAQ',
@@ -234,57 +217,49 @@ const ANIMATIONS = {
   clock: 'CAACAgIAAxkBAAIBW2Yp4C5k8z5X5J5z3X5J5z5X5J5AAQAC'
 };
 
-// Rate limiting
+// Tezlik chegarasi
 const limiter = new Map();
 const RATE_LIMIT = 10;
 const RATE_LIMIT_WINDOW = 60 * 1000;
 
-// Test group access
+// Guruhga test xabari
 async function testGroupAccess() {
   try {
-    await bot.sendMessage(GROUP_ID, `📢 *Hurmatli fuqarolar!*
-
-Endilikda murojaatlaringizni [@QabulxonaBot_bot](https://t.me/QabulxonaBot_bot) Telegram boti orqali yuborishingiz mumkin.
-
-Bu sizning murojaatingizni tezroq ko‘rib chiqish va hal qilishga yordam beradi.
-
-ℹ️ Hozirda botda texnik ishlar olib borilmoqda, biroq bot to‘liq ishlayapti. Bemalol murojaat yuborishingiz mumkin.`, {
+    await bot.sendMessage(GROUP_ID, `📢 *Hurmatli fuqarolar!*\n\nEndilikda murojaatlaringizni [@QabulxonaBot_bot](https://t.me/QabulxonaBot_bot) Telegram boti orqali yuborishingiz mumkin.\n\nBu sizning murojaatingizni tezroq ko‘rib chiqish va hal qilishga yordam beradi.\n\nℹ️ Hozirda botda texnik ishlar olib borilmoqda, biroq bot to‘liq ishlayapti. Bemalol murojaat yuborishingiz mumkin.`, {
       parse_mode: "Markdown"
     });
-
-    logger.info("✅ Group test info message sent");
+    logger.info("✅ Guruhga test xabari yuborildi");
   } catch (err) {
-    logger.error("🚫 Error sending group test message:", err);
+    logger.error("🚫 Guruhga test xabari yuborishda xato:", err);
     bot.sendMessage(ADMIN_ID, "🚫 Guruhga ulanishda xatolik yuz berdi!");
   }
 }
 
-
-// Verify group membership
+// Guruh a'zoligini tekshirish
 async function verifyGroupMembership() {
   try {
     await bot.getChat(GROUP_ID);
-    logger.info("✅ Bot is in group");
+    logger.info("✅ Bot guruhda");
   } catch (err) {
-    logger.error("🚫 Bot is not in group:", err);
-    bot.sendMessage(ADMIN_ID, "🚫 Bot has been removed from the group!");
+    logger.error("🚫 Bot guruhda emas:", err);
+    bot.sendMessage(ADMIN_ID, "🚫 Bot guruhdan chiqarib yuborilgan!");
   }
 }
 
-// Start polling with retry
+// Pollingni qayta boshlash
 function startPollingWithRetry() {
   bot.startPolling().catch(err => {
-    logger.error("🚫 Polling error:", err);
+    logger.error("🚫 Polling xatosi:", err);
     setTimeout(startPollingWithRetry, 5000);
   });
 }
 
-// Initialize bot
+// Botni ishga tushirish
 startPollingWithRetry();
 testGroupAccess();
 cron.schedule('0 0 * * *', verifyGroupMembership);
 
-// Check if user is blocked
+// Foydalanuvchi bloklanganligini tekshirish
 async function isUserBlocked(chatId) {
   return new Promise((resolve) => {
     db.get("SELECT user_id FROM blocked_users WHERE user_id = ?", [chatId], (err, row) => {
@@ -293,14 +268,7 @@ async function isUserBlocked(chatId) {
   });
 }
 
-// Offensive words detection
-function containsBadWords(text) {
-  if (!text) return false;
-  const lowerText = text.toLowerCase();
-  return BAD_WORDS.some(word => lowerText.includes(word.toLowerCase()));
-}
-
-// Log actions for audit
+// Harakatlarni log qilish
 function logAction(userId, action, details) {
   db.run(
     "INSERT INTO audit_log (user_id, action, details, timestamp) VALUES (?, ?, ?, ?)",
@@ -308,7 +276,7 @@ function logAction(userId, action, details) {
   );
 }
 
-// Check rate limit
+// Tezlik chegarasini tekshirish
 function checkRateLimit(chatId) {
   const now = Date.now();
   if (!limiter.has(chatId)) {
@@ -326,7 +294,7 @@ function checkRateLimit(chatId) {
   return true;
 }
 
-// Commands handler
+// Buyruqlar bilan ishlash
 bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|reply|comment|assign|stats|language|help)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const command = match[1];
@@ -345,15 +313,15 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
 
   if (command === "start") {
     userSteps[chatId] = 'askName';
-    userData[chatId] = { media: [], language: 'uz' };
+    userData[chatId] = userData[chatId] || { media: [], language: 'uz' };
     bot.sendSticker(chatId, ANIMATIONS.welcome);
     bot.sendMessage(chatId, languages.uz.askName, {
       reply_markup: {
         inline_keyboard: [[{ text: languages.uz.back, callback_data: "back_to_name" }]]
       }
     });
-    logger.info(`👤 User ${chatId} started complaint process`);
-    logAction(chatId, "start", "User started complaint process");
+    logger.info(`👤 Foydalanuvchi ${chatId} murojaat jarayonini boshladi`);
+    logAction(chatId, "start", "Foydalanuvchi murojaat jarayonini boshladi");
     return;
   }
 
@@ -376,7 +344,9 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
         return;
       }
       userSteps[chatId] = 'editComplaint';
-      userData[chatId] = { complaintId, media: JSON.parse(row.files || '[]') };
+      userData[chatId] = userData[chatId] || {};
+      userData[chatId].complaintId = complaintId;
+      userData[chatId].media = JSON.parse(row.files || '[]');
       bot.sendMessage(chatId, languages.uz.editComplaint, {
         reply_markup: {
           inline_keyboard: [[{ text: languages.uz.back, callback_data: "back_to_name" }]]
@@ -404,6 +374,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
 
   if (command === "broadcast" && chatId === ADMIN_ID) {
     userSteps[chatId] = 'askBroadcast';
+    userData[chatId] = userData[chatId] || {};
     bot.sendMessage(chatId, languages.uz.broadcastPrompt, {
       reply_markup: {
         inline_keyboard: [
@@ -430,7 +401,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
       }
       bot.sendMessage(chatId, languages.uz.deleteSuccess.replace('%s', complaintId));
       bot.sendSticker(chatId, ANIMATIONS.success);
-      logAction(chatId, "delete_complaint", `Deleted complaint ${complaintId}`);
+      logAction(chatId, "delete_complaint", `Murojaat ${complaintId} o'chirildi`);
     });
     return;
   }
@@ -443,7 +414,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
       return;
     }
     db.run("INSERT OR REPLACE INTO blocked_users (user_id, reason, time) VALUES (?, ?, ?)", 
-      [userId, reason || "No reason provided", new Date().toISOString()], (err) => {
+      [userId, reason || "Sabab ko‘rsatilmagan", new Date().toISOString()], (err) => {
         if (err) {
           bot.sendMessage(chatId, `🚫 Foydalanuvchi #${userId} bloklashda xato!`);
           bot.sendSticker(chatId, ANIMATIONS.error);
@@ -452,7 +423,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
         bot.sendMessage(chatId, `✅ Foydalanuvchi #${userId} bloklandi!`);
         bot.sendMessage(userId, languages.uz.blockedUser);
         bot.sendSticker(userId, ANIMATIONS.error);
-        logAction(chatId, "block_user", `Blocked user ${userId} for: ${reason}`);
+        logAction(chatId, "block_user", `Foydalanuvchi ${userId} bloklandi: ${reason}`);
       });
     return;
   }
@@ -476,7 +447,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
         .then(() => {
           bot.sendMessage(chatId, languages.uz.replySent.replace('%s', complaintId));
           bot.sendSticker(chatId, ANIMATIONS.success);
-          logAction(chatId, "reply_complaint", `Replied to complaint ${complaintId}`);
+          logAction(chatId, "reply_complaint", `Murojaat ${complaintId} ga javob yuborildi`);
         })
         .catch(() => {
           bot.sendMessage(chatId, "🚫 Foydalanuvchiga javob yuborish mumkin emas!");
@@ -502,7 +473,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
         }
         bot.sendMessage(chatId, languages.uz.commentAdded.replace('%s', complaintId));
         bot.sendSticker(chatId, ANIMATIONS.success);
-        logAction(chatId, "comment_complaint", `Added comment to complaint ${complaintId}`);
+        logAction(chatId, "comment_complaint", `Murojaat ${complaintId} ga izoh qo'shildi`);
       });
     return;
   }
@@ -522,7 +493,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
       }
       bot.sendMessage(chatId, languages.uz.assignSuccess.replace('%s', complaintId).replace('%s', assignee));
       bot.sendSticker(chatId, ANIMATIONS.success);
-      logAction(chatId, "assign_complaint", `Assigned complaint ${complaintId} to ${assignee}`);
+      logAction(chatId, "assign_complaint", `Murojaat ${complaintId} ${assignee} ga tayinlandi`);
     });
     return;
   }
@@ -543,7 +514,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
         }
         bot.sendMessage(chatId, languages.uz.statsToday.replace('%s', today).replace('%s', todayRow.count).replace('%s', totalRow.total));
         bot.sendSticker(chatId, ANIMATIONS.success);
-        logAction(chatId, "view_stats", "Viewed daily statistics");
+        logAction(chatId, "view_stats", "Kunlik statistika ko'rildi");
       });
     });
     return;
@@ -564,7 +535,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
   if (command === "help") {
     bot.sendMessage(chatId, languages[userData[chatId]?.language || 'uz'].help, { parse_mode: "Markdown" });
     bot.sendSticker(chatId, ANIMATIONS.welcome);
-    logAction(chatId, "view_help", "User viewed help");
+    logAction(chatId, "view_help", "Foydalanuvchi yordamni ko'rdi");
     return;
   }
 
@@ -575,7 +546,7 @@ bot.onText(/\/(start|mycomplaints|edit|status|export|broadcast|delete|block|repl
   }
 });
 
-// Callback query handler
+// Callback query ishlovchisi
 bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -601,7 +572,7 @@ bot.on('callback_query', (query) => {
     userSteps[chatId] = 'askSummary';
     bot.sendMessage(chatId, languages[userData[chatId].language].askSummary, {
       reply_markup: {
-        inline_keyboard: [[{ text: languages[userData[chatId].language].back, callback_data: "back_to_phone" }]]
+        inline_keyboard: [[{ text: languages[userData[chatId].language].back, callback_data: "back_to_passport" }]]
       }
     });
     bot.answerCallbackQuery(query.id);
@@ -644,13 +615,24 @@ bot.on('callback_query', (query) => {
     return;
   }
 
+  if (data === "back_to_passport") {
+    userSteps[chatId] = 'askPassport';
+    bot.sendMessage(chatId, languages[userData[chatId].language].askPassport, {
+      reply_markup: {
+        inline_keyboard: [[{ text: languages[userData[chatId].language].back, callback_data: "back_to_phone" }]]
+      }
+    });
+    bot.answerCallbackQuery(query.id);
+    return;
+  }
+
   if (data === "back_to_section") {
     userSteps[chatId] = 'askSection';
     bot.sendMessage(chatId, languages[userData[chatId].language].askSection, {
       reply_markup: {
         inline_keyboard: [
           ...Object.keys(sections).map(section => [{ text: section, callback_data: section }]),
-          [{ text: languages[userData[chatId].language].back, callback_data: "back_to_phone" }]
+          [{ text: languages[userData[chatId].language].back, callback_data: "back_to_passport" }]
         ]
       }
     });
@@ -737,7 +719,7 @@ bot.on('callback_query', (query) => {
   }
 
   if (data === "cancel_broadcast" && chatId === ADMIN_ID) {
-    cleanup(chatId);
+    cleanupBroadcast(chatId);
     bot.sendMessage(chatId, "🚫 Broadcast bekor qilindi.");
     bot.sendSticker(chatId, ANIMATIONS.error);
     bot.answerCallbackQuery(query.id);
@@ -745,14 +727,14 @@ bot.on('callback_query', (query) => {
   }
 });
 
-// Message handler with offensive words filter
+// Xabar ishlovchisi
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text?.trim();
 
-  // Ignore messages from group chat
+  // Guruh xabarlarini e'tiborsiz qoldirish
   if (msg.chat.type !== 'private') {
-    logger.info(`Ignoring message from group chat (${chatId})`);
+    logger.info(`Guruh xabari (${chatId}) e'tiborsiz qoldirildi`);
     return;
   }
 
@@ -765,15 +747,6 @@ bot.on('message', async (msg) => {
   if (!checkRateLimit(chatId)) {
     bot.sendMessage(chatId, languages[userData[chatId]?.language || 'uz'].rateLimit);
     bot.sendSticker(chatId, ANIMATIONS.error);
-    return;
-  }
-
-  if (text && containsBadWords(text)) {
-    bot.sendMessage(chatId, languages[userData[chatId]?.language || 'uz'].offensiveWarning);
-    bot.sendSticker(chatId, ANIMATIONS.error);
-    const warningMsg = `🚨 Xaqoratli xabar:\n\nFoydalanuvchi: @${msg.from.username || "Noma'lum"} (${msg.chat.id})\nXabar: ${text}`;
-    bot.sendMessage(ADMIN_ID, warningMsg);
-    logAction(chatId, "offensive_message", `User sent offensive message: ${text}`);
     return;
   }
 
@@ -826,13 +799,43 @@ bot.on('message', async (msg) => {
         return;
       }
       userData[chatId].phone = phoneNumber;
+      userSteps[chatId] = 'askPassport';
+      bot.sendMessage(chatId, languages[userData[chatId].language].askPassport, {
+        reply_markup: {
+          inline_keyboard: [[{ text: languages[userData[chatId].language].back, callback_data: "back_to_phone" }]]
+        }
+      });
+      break;
+
+    case 'askPassport':
+      if (!text || !text.match(/^[A-Z]{2}\d{7}$/)) {
+        bot.sendMessage(chatId, languages[userData[chatId].language].invalidPassport);
+        bot.sendSticker(chatId, ANIMATIONS.error);
+        return;
+      }
+      userData[chatId].passport = text;
       userSteps[chatId] = 'askSection';
       bot.sendMessage(chatId, languages[userData[chatId].language].askSection, {
         reply_markup: {
           inline_keyboard: [
             ...Object.keys(sections).map(section => [{ text: section, callback_data: section }]),
-            [{ text: languages[userData[chatId].language].back, callback_data: "back_to_address" }]
+            [{ text: languages[userData[chatId].language].back, callback_data: "back_to_phone" }]
           ]
+        }
+      });
+      break;
+
+    case 'askSection':
+      if (!text || !Object.values(sections).includes(text)) {
+        bot.sendMessage(chatId, languages[userData[chatId].language].askSection);
+        bot.sendSticker(chatId, ANIMATIONS.error);
+        return;
+      }
+      userData[chatId].section = text;
+      userSteps[chatId] = 'askSummary';
+      bot.sendMessage(chatId, languages[userData[chatId].language].askSummary, {
+        reply_markup: {
+          inline_keyboard: [[{ text: languages[userData[chatId].language].back, callback_data: "back_to_passport" }]]
         }
       });
       break;
@@ -912,7 +915,7 @@ bot.on('message', async (msg) => {
       userData[chatId].summary = text;
       db.run("UPDATE complaints SET summary = ? WHERE id = ?", [text, userData[chatId].complaintId], (err) => {
         if (err) {
-          logger.error("🚫 Error editing complaint:", err);
+          logger.error("🚫 Murojaatni tahrirlashda xato:", err);
           bot.sendMessage(chatId, "🚫 Tahrirlashda xato!");
           bot.sendSticker(chatId, ANIMATIONS.error);
           return;
@@ -920,9 +923,9 @@ bot.on('message', async (msg) => {
         bot.sendMessage(chatId, languages[userData[chatId].language].editSuccess.replace('%s', userData[chatId].complaintId));
         bot.sendMessage(ADMIN_ID, `✏️ Murojaat #${userData[chatId].complaintId} o‘zgartirildi: ${text}`);
         bot.sendSticker(chatId, ANIMATIONS.success);
-        logger.info(`✅ Complaint ${userData[chatId].complaintId} edited`);
-        logAction(chatId, "edit_complaint", `Edited complaint ${userData[chatId].complaintId}`);
-        cleanup(chatId);
+        logger.info(`✅ Murojaat ${userData[chatId].complaintId} tahrirlandi`);
+        logAction(chatId, "edit_complaint", `Murojaat ${userData[chatId].complaintId} tahrirlandi`);
+        cleanupBroadcast(chatId);
       });
       break;
 
@@ -942,30 +945,30 @@ bot.on('message', async (msg) => {
   }
 });
 
-// Send media to target
+// Fayllarni yuborish
 async function sendMediaToTarget(targetId, media, message) {
   try {
     if (media.type === 'photo' && media.media) {
       await bot.sendPhoto(targetId, media.media, { caption: message, parse_mode: "Markdown" });
-      logger.info(`✅ Photo sent to ${targetId}`);
+      logger.info(`✅ ${targetId} ga rasm yuborildi`);
     } else if (media.type === 'video' && media.media) {
       await bot.sendVideo(targetId, media.media, { caption: message, parse_mode: "Markdown" });
-      logger.info(`✅ Video sent to ${targetId}`);
+      logger.info(`✅ ${targetId} ga video yuborildi`);
     } else {
-      throw new Error("Invalid file type or ID");
+      throw new Error("Noto‘g‘ri fayl turi yoki ID");
     }
   } catch (err) {
-    logger.error(`🚫 Error sending ${media.type} to ${targetId}:`, err);
+    logger.error(`🚫 ${media.type} ni ${targetId} ga yuborishda xato:`, err);
     throw err;
   }
 }
 
-// Broadcast message
+// Broadcast xabar yuborish
 async function sendBroadcast(chatId, message) {
   const failedChats = [];
   db.all("SELECT DISTINCT chat_id FROM complaints", [], async (err, rows) => {
     if (err) {
-      logger.error("🚫 Broadcast error:", err);
+      logger.error("🚫 Broadcast xatosi:", err);
       bot.sendMessage(chatId, languages.uz.broadcastError);
       bot.sendSticker(chatId, ANIMATIONS.error);
       return;
@@ -975,25 +978,25 @@ async function sendBroadcast(chatId, message) {
         await bot.sendMessage(row.chat_id, `📢 Admin xabari: ${message}`);
       } catch (err) {
         failedChats.push(row.chat_id);
-        logger.error(`🚫 Error sending broadcast to ${row.chat_id}:`, err);
+        logger.error(`🚫 ${row.chat_id} ga broadcast yuborishda xato:`, err);
       }
     }
     try {
       await bot.sendMessage(GROUP_ID, `📢 Admin xabari: ${message}`);
-      logger.info(`✅ Broadcast sent to group (${GROUP_ID})`);
+      logger.info(`✅ Guruhga (${GROUP_ID}) broadcast yuborildi`);
     } catch (err) {
-      logger.error(`🚫 Error sending broadcast to group (${GROUP_ID}):`, err);
+      logger.error(`🚫 Guruhga (${GROUP_ID}) broadcast yuborishda xato:`, err);
       failedChats.push(GROUP_ID);
     }
     bot.sendMessage(chatId, failedChats.length ? `⚠️ Xabar yuborildi, lekin ${failedChats.length} chatda xato: ${failedChats.join(', ')}` : languages.uz.broadcastSuccess);
     bot.sendSticker(chatId, ANIMATIONS.success);
-    logger.info(`✅ Broadcast sent by admin ${chatId}`);
-    logAction(chatId, "broadcast", `Sent broadcast: ${message}`);
-    cleanup(chatId);
+    logger.info(`✅ Admin ${chatId} tomonidan broadcast yuborildi`);
+    logAction(chatId, "broadcast", `Broadcast yuborildi: ${message}`);
+    cleanupBroadcast(chatId);
   });
 }
 
-// Send confirmation
+// Tasdiqlash xabari
 function sendConfirmation(chatId) {
   const data = userData[chatId];
   const mediaCount = data.media.length > 0 ? `${data.media.length} ta` : "Yo‘q";
@@ -1001,6 +1004,7 @@ function sendConfirmation(chatId) {
     .replace('%s', data.fullName)
     .replace('%s', data.address)
     .replace('%s', data.phone)
+    .replace('%s', data.passport)
     .replace('%s', data.section)
     .replace('%s', data.summary)
     .replace('%s', mediaCount);
@@ -1017,7 +1021,7 @@ function sendConfirmation(chatId) {
   userSteps[chatId] = 'askConfirmation';
 }
 
-// Send to admin and group
+// Admin va guruhga yuborish
 async function sendToAdminAndGroup(chatId) {
   const data = userData[chatId];
   const time = new Date().toLocaleString('uz-UZ');
@@ -1030,6 +1034,7 @@ async function sendToAdminAndGroup(chatId) {
 📛 Username: @${data.username}
 🏠 Manzil: ${data.address}
 📞 Telefon: ${data.phone}
+📑 Pasport: ${data.passport}
 📂 Bo'lim: ${data.section}
 📋 Murojaat: ${data.summary}
 📅 Vaqt: ${time}
@@ -1038,12 +1043,12 @@ async function sendToAdminAndGroup(chatId) {
 
   db.serialize(() => {
     db.run("BEGIN TRANSACTION");
-    db.run("INSERT INTO complaints (id, chat_id, username, full_name, address, phone, section, summary, status, time, files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [complaintId, chatId, data.username, data.fullName, data.address, data.phone, data.section, data.summary, 'Pending', time, JSON.stringify(data.media)],
+    db.run("INSERT INTO complaints (id, chat_id, username, full_name, address, phone, passport, section, summary, status, time, files) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [complaintId, chatId, data.username, data.fullName, data.address, data.phone, data.passport, data.section, data.summary, 'Pending', time, JSON.stringify(data.media)],
       (err) => {
         if (err) {
           db.run("ROLLBACK");
-          logger.error("🚫 Database write error:", err);
+          logger.error("🚫 Ma'lumotlar bazasiga yozishda xato:", err);
           bot.sendMessage(chatId, "🚫 Murojaat yuborishda xato!");
           bot.sendSticker(chatId, ANIMATIONS.error);
           return;
@@ -1057,33 +1062,35 @@ async function sendToAdminAndGroup(chatId) {
   async function sendMessages() {
     const failedTargets = [];
     try {
+      // Matnli xabarni avval yuborish
+      try {
+        await bot.sendMessage(GROUP_ID, message, { parse_mode: "Markdown" });
+        logger.info(`✅ Guruhga (${GROUP_ID}) matnli xabar yuborildi`);
+      } catch (err) {
+        logger.error("🚫 Guruhga matnli xabar yuborishda xato:", err);
+        failedTargets.push(`Guruh (${GROUP_ID})`);
+      }
+      try {
+        await bot.sendMessage(ADMIN_ID, message, { parse_mode: "Markdown" });
+        logger.info(`✅ Adminga (${ADMIN_ID}) matnli xabar yuborildi`);
+      } catch (err) {
+        logger.error("🚫 Adminga matnli xabar yuborishda xato:", err);
+        failedTargets.push(`Admin (${ADMIN_ID})`);
+      }
+
+      // Fayllarni yuborish
       if (data.media.length > 0) {
         for (const item of data.media) {
           try {
             await sendMediaToTarget(GROUP_ID, item, message);
           } catch (err) {
-            failedTargets.push(`Guruh (${GROUP_ID})`);
+            failedTargets.push(`Guruh (${GROUP_ID}) fayl`);
           }
           try {
             await sendMediaToTarget(ADMIN_ID, item, message);
           } catch (err) {
-            failedTargets.push(`Admin (${ADMIN_ID})`);
+            failedTargets.push(`Admin (${ADMIN_ID}) fayl`);
           }
-        }
-      } else {
-        try {
-          await bot.sendMessage(GROUP_ID, message, { parse_mode: "Markdown" });
-          logger.info(`✅ Message sent to group (${GROUP_ID})`);
-        } catch (err) {
-          logger.error("🚫 Error sending message to group:", err);
-          failedTargets.push(`Guruh (${GROUP_ID})`);
-        }
-        try {
-          await bot.sendMessage(ADMIN_ID, message, { parse_mode: "Markdown" });
-          logger.info(`✅ Message sent to admin (${ADMIN_ID})`);
-        } catch (err) {
-          logger.error("🚫 Error sending message to admin:", err);
-          failedTargets.push(`Admin (${ADMIN_ID})`);
         }
       }
 
@@ -1096,19 +1103,18 @@ async function sendToAdminAndGroup(chatId) {
         });
         bot.sendSticker(chatId, ANIMATIONS.clock);
         bot.sendSticker(chatId, ANIMATIONS.success);
-        logger.info(`✅ Complaint ${complaintId} sent to group (${GROUP_ID}) and admin (${ADMIN_ID})`);
-        logAction(chatId, "submit_complaint", `Submitted complaint ${complaintId}`);
+        logger.info(`✅ Murojaat ${complaintId} guruhga (${GROUP_ID}) va adminga (${ADMIN_ID}) yuborildi`);
+        logAction(chatId, "submit_complaint", `Murojaat ${complaintId} yuborildi`);
       }
     } catch (err) {
-      logger.error("🚫 General error sending message:", err);
+      logger.error("🚫 Xabar yuborishda umumiy xato:", err);
       bot.sendMessage(chatId, "🚫 Murojaat yuborishda kutilmagan xato!");
       bot.sendSticker(chatId, ANIMATIONS.error);
     }
-    cleanup(chatId);
   }
 }
 
-// Show user complaints
+// Foydalanuvchi murojaatlarini ko‘rsatish
 function showUserComplaints(chatId) {
   db.all("SELECT * FROM complaints WHERE chat_id = ?", [chatId], (err, rows) => {
     if (err || !rows.length) {
@@ -1118,15 +1124,15 @@ function showUserComplaints(chatId) {
     }
     let message = rows.map(row => `ID: ${row.id}\nBo'lim: ${row.section}\nMurojaat: ${row.summary}\nHolati: ${row.status}\nVaqt: ${row.time}`).join('\n\n');
     bot.sendMessage(chatId, languages[userData[chatId]?.language || 'uz'].myComplaints.replace('%s', message));
-    logAction(chatId, "view_complaints", "User viewed their complaints");
+    logAction(chatId, "view_complaints", "Foydalanuvchi o'z murojaatlarini ko'rdi");
   });
 }
 
-// Admin dashboard
+// Admin paneli
 function showAdminDashboard(chatId) {
   db.all("SELECT * FROM complaints", [], (err, rows) => {
     if (err) {
-      logger.error("🚫 Database error:", err);
+      logger.error("🚫 Ma'lumotlar bazasi xatosi:", err);
       bot.sendMessage(chatId, "🚫 Ma'lumot olishda xato!");
       bot.sendSticker(chatId, ANIMATIONS.error);
       return;
@@ -1146,11 +1152,11 @@ function showAdminDashboard(chatId) {
         ]
       }
     });
-    logAction(chatId, "view_dashboard", "Admin viewed dashboard");
+    logAction(chatId, "view_dashboard", "Admin panel ko'rildi");
   });
 }
 
-// Filter complaints by section
+// Bo‘lim bo‘yicha murojaatlarni filtrlash
 function filterComplaintsBySection(chatId, section) {
   db.all("SELECT * FROM complaints WHERE section = ?", [sections[section]], (err, rows) => {
     if (err || !rows.length) {
@@ -1175,11 +1181,11 @@ function filterComplaintsBySection(chatId, section) {
   });
 }
 
-// Update complaint status
+// Murojaat holatini yangilash
 function updateComplaintStatus(chatId, complaintId, newStatus) {
   db.run("UPDATE complaints SET status = ? WHERE id = ?", [newStatus, complaintId], (err) => {
     if (err) {
-      logger.error("🚫 Error updating status:", err);
+      logger.error("🚫 Holatni yangilashda xato:", err);
       bot.sendMessage(chatId, "🚫 Holatni yangilashda xato!");
       bot.sendSticker(chatId, ANIMATIONS.error);
       return;
@@ -1193,21 +1199,19 @@ function updateComplaintStatus(chatId, complaintId, newStatus) {
       bot.sendMessage(chatId, languages.uz.statusUpdated.replace('%s', complaintId).replace('%s', newStatus));
       bot.sendMessage(row.chat_id, languages[userData[row.chat_id]?.language || 'uz'].statusUpdated.replace('%s', complaintId).replace('%s', newStatus));
       bot.sendSticker(chatId, ANIMATIONS.success);
-      logger.info(`✅ Complaint ${complaintId} status updated to ${newStatus}`);
-      logAction(chatId, "update_status", `Updated complaint ${complaintId} to ${newStatus}`);
+      logger.info(`✅ Murojaat ${complaintId} holati ${newStatus} ga yangilandi`);
+      logAction(chatId, "update_status", `Murojaat ${complaintId} ${newStatus} ga yangilandi`);
     });
   });
 }
 
-// Export to Excel
-// Export to Excel
+// Excelga eksport qilish
 async function exportToExcel(chatId) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Complaint Bot';
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  // Define columns for all sheets
   const columns = [
     { header: 'ID', key: 'id', width: 25 },
     { header: 'Chat ID', key: 'chat_id', width: 15 },
@@ -1215,6 +1219,7 @@ async function exportToExcel(chatId) {
     { header: 'Ism-familiya', key: 'full_name', width: 20 },
     { header: 'Manzil', key: 'address', width: 25 },
     { header: 'Telefon', key: 'phone', width: 15 },
+    { header: 'Pasport', key: 'passport', width: 15 },
     { header: 'Bo‘lim', key: 'section', width: 20 },
     { header: 'Murojaat', key: 'summary', width: 50 },
     { header: 'Holati', key: 'status', width: 15 },
@@ -1223,16 +1228,14 @@ async function exportToExcel(chatId) {
     { header: 'Xodim', key: 'assignee', width: 20 }
   ];
 
-  // Fetch all complaints
   db.all("SELECT * FROM complaints", [], async (err, rows) => {
     if (err) {
-      logger.error("🚫 Database error:", err);
+      logger.error("🚫 Ma'lumotlar bazasi xatosi:", err);
       bot.sendMessage(chatId, "🚫 Xisobot yuklashda xato!");
       bot.sendSticker(chatId, ANIMATIONS.error);
       return;
     }
 
-    // Create Summary sheet
     const summarySheet = workbook.addWorksheet('Umumiy Hisobot', { properties: { tabColor: { argb: 'FF28A745' } } });
     summarySheet.columns = [
       { header: 'Kategoriya', key: 'category', width: 20 },
@@ -1240,7 +1243,6 @@ async function exportToExcel(chatId) {
       { header: 'Foiz (%)', key: 'percentage', width: 10 }
     ];
 
-    // Calculate statistics
     const totalComplaints = rows.length;
     const complaintsBySection = {};
     const statusCounts = { Pending: 0, 'In Progress': 0, Resolved: 0 };
@@ -1251,14 +1253,12 @@ async function exportToExcel(chatId) {
       statusCounts[row.status] = (statusCounts[row.status] || 0) + 1;
     });
 
-    // Add summary data
     summarySheet.addRow({ category: 'Jami murojaatlar', count: totalComplaints, percentage: '100%' });
     summarySheet.addRow({ category: 'Kutilyapti', count: statusCounts.Pending, percentage: totalComplaints ? ((statusCounts.Pending / totalComplaints) * 100).toFixed(2) + '%' : '0%' });
     summarySheet.addRow({ category: 'Jarayonda', count: statusCounts['In Progress'], percentage: totalComplaints ? ((statusCounts['In Progress'] / totalComplaints) * 100).toFixed(2) + '%' : '0%' });
     summarySheet.addRow({ category: 'Yakunlangan', count: statusCounts.Resolved, percentage: totalComplaints ? ((statusCounts.Resolved / totalComplaints) * 100).toFixed(2) + '%' : '0%' });
-    summarySheet.addRow({ category: '', count: '', percentage: '' }); // Spacer
+    summarySheet.addRow({ category: '', count: '', percentage: '' });
 
-    // Add section-wise data
     Object.keys(complaintsBySection).forEach(section => {
       const count = complaintsBySection[section];
       summarySheet.addRow({
@@ -1268,7 +1268,6 @@ async function exportToExcel(chatId) {
       });
     });
 
-    // Style Summary sheet header
     summarySheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
     summarySheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF28A745' } };
     summarySheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
@@ -1276,7 +1275,6 @@ async function exportToExcel(chatId) {
       cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    // Style Summary sheet data
     summarySheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber > 1) {
         row.eachCell({ includeEmpty: true }, cell => {
@@ -1286,7 +1284,6 @@ async function exportToExcel(chatId) {
       }
     });
 
-    // Group complaints by section
     const complaintsBySectionData = {};
     rows.forEach(row => {
       const section = row.section || 'Boshqa';
@@ -1296,12 +1293,10 @@ async function exportToExcel(chatId) {
       complaintsBySectionData[section].push(row);
     });
 
-    // Create a sheet for each section
     Object.keys(complaintsBySectionData).forEach(section => {
       const worksheet = workbook.addWorksheet(section, { properties: { tabColor: { argb: 'FF4A90E2' } } });
       worksheet.columns = columns;
 
-      // Style header
       worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
       worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
       worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
@@ -1309,7 +1304,6 @@ async function exportToExcel(chatId) {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
-      // Add data
       complaintsBySectionData[section].forEach(row => {
         const rowData = worksheet.addRow({
           id: row.id,
@@ -1318,6 +1312,7 @@ async function exportToExcel(chatId) {
           full_name: row.full_name,
           address: row.address,
           phone: row.phone,
+          passport: row.passport,
           section: row.section,
           summary: row.summary,
           status: row.status,
@@ -1326,7 +1321,6 @@ async function exportToExcel(chatId) {
           assignee: row.assignee || 'Belgilanmagan'
         });
 
-        // Conditional formatting based on complaint age
         const daysDiff = Math.floor((new Date() - new Date(row.time)) / (1000 * 60 * 60 * 24));
         const fillColor = daysDiff > 3 ? 'FFF8D7DA' : 'FFD4EDDA';
         rowData.eachCell({ includeEmpty: true }, cell => {
@@ -1336,7 +1330,6 @@ async function exportToExcel(chatId) {
         });
       });
 
-      // Auto-fit columns with some padding
       worksheet.columns.forEach(column => {
         let maxLength = 0;
         column.eachCell({ includeEmpty: true }, cell => {
@@ -1347,7 +1340,6 @@ async function exportToExcel(chatId) {
       });
     });
 
-    // Save and send the file
     const fileName = `murojaatlar_${Date.now()}.xlsx`;
     try {
       await workbook.xlsx.writeFile(fileName);
@@ -1355,30 +1347,30 @@ async function exportToExcel(chatId) {
       bot.sendMessage(chatId, languages.uz.exportSuccess);
       bot.sendSticker(chatId, ANIMATIONS.success);
       fs.unlinkSync(fileName);
-      logger.info(`✅ Report exported for admin ${chatId}`);
-      logAction(chatId, "export_report", "Exported complaints report");
+      logger.info(`✅ Admin ${chatId} uchun xisobot eksport qilindi`);
+      logAction(chatId, "export_report", "Murojaatlar xisoboti eksport qilindi");
     } catch (err) {
-      logger.error("🚫 Error exporting report:", err);
+      logger.error("🚫 Xisobot eksport qilishda xato:", err);
       bot.sendMessage(chatId, "🚫 Xisobot yuklashda xato!");
       bot.sendSticker(chatId, ANIMATIONS.error);
     }
   });
 }
 
-// Auto-report every 3 days
+// Har 3 kunda avto-xisobot
 cron.schedule('0 0 */3 * *', () => {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Complaint Bot';
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  // Define columns for all sheets
   const columns = [
     { header: 'ID', key: 'id', width: 25 },
     { header: 'Username', key: 'username', width: 20 },
     { header: 'Ism', key: 'full_name', width: 20 },
     { header: 'Manzil', key: 'address', width: 25 },
     { header: 'Telefon', key: 'phone', width: 15 },
+    { header: 'Pasport', key: 'passport', width: 15 },
     { header: 'Bo‘lim', key: 'section', width: 20 },
     { header: 'Murojaat', key: 'summary', width: 50 },
     { header: 'Vaqt', key: 'time', width: 20 },
@@ -1389,11 +1381,10 @@ cron.schedule('0 0 */3 * *', () => {
 
   db.all("SELECT * FROM complaints", [], async (err, rows) => {
     if (err) {
-      logger.error("🚫 Auto-report error:", err);
+      logger.error("🚫 Avto-xisobot xatosi:", err);
       return;
     }
 
-    // Group complaints by section
     const complaintsBySection = {};
     rows.forEach(row => {
       const section = row.section || 'Boshqa';
@@ -1403,12 +1394,10 @@ cron.schedule('0 0 */3 * *', () => {
       complaintsBySection[section].push(row);
     });
 
-    // Create a sheet for each section
     Object.keys(complaintsBySection).forEach(section => {
       const worksheet = workbook.addWorksheet(section, { properties: { tabColor: { argb: 'FF4A90E2' } } });
       worksheet.columns = columns;
 
-      // Style header
       worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
       worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
       worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
@@ -1416,7 +1405,6 @@ cron.schedule('0 0 */3 * *', () => {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
-      // Add data
       complaintsBySection[section].forEach(row => {
         const rowData = worksheet.addRow({
           id: row.id,
@@ -1424,6 +1412,7 @@ cron.schedule('0 0 */3 * *', () => {
           full_name: row.full_name,
           address: row.address,
           phone: row.phone,
+          passport: row.passport,
           section: row.section,
           summary: row.summary,
           time: row.time,
@@ -1432,17 +1421,14 @@ cron.schedule('0 0 */3 * *', () => {
           assignee: row.assignee || 'Belgilanmagan'
         });
 
-        // Conditional formatting based on complaint age
         const daysDiff = Math.floor((new Date() - new Date(row.time)) / (1000 * 60 * 60 * 24));
-        const fillColor = daysDiff > 3 ? 'FFF8D7DA' : 'FFD4EDDA';
         rowData.eachCell({ includeEmpty: true }, cell => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: daysDiff > 3 ? 'FFF8D7DA' : 'FFD4EDDA' } };
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
           cell.alignment = { vertical: 'top', wrapText: true };
         });
       });
 
-      // Auto-fit columns with some padding
       worksheet.columns.forEach(column => {
         let maxLength = 0;
         column.eachCell({ includeEmpty: true }, cell => {
@@ -1453,94 +1439,118 @@ cron.schedule('0 0 */3 * *', () => {
       });
     });
 
-    const fileName = `avto_murojaatlar_${Date.now()}.xlsx`;
+    const fileName = `avto_xisobot_${Date.now()}.xlsx`;
     try {
-      workbook.xlsx.writeFile(fileName).then(() => {
-        bot.sendDocument(ADMIN_ID, fileName).then(() => {
-          bot.sendMessage(ADMIN_ID, "📥 Avtomatik xisobot yuklandi!");
-          bot.sendSticker(ADMIN_ID, ANIMATIONS.success);
-          fs.unlinkSync(fileName);
-          logger.info(`✅ Auto-report sent to admin ${ADMIN_ID}`);
-          logAction(ADMIN_ID, "auto_report", "Sent auto-report");
-        }).catch(err => {
-          logger.error("🚫 Auto-report send error:", err);
-        });
-      }).catch(err => {
-        logger.error("🚫 Auto-report write error:", err);
-      });
-    } catch (err) {
-      logger.error("🚫 Auto-report error:", err);
-    }
-  });
-});
-
-// Daily reminder
-cron.schedule('0 0 * * *', () => {
-  db.all("SELECT * FROM complaints WHERE status = 'Pending'", [], (err, rows) => {
-    if (err) {
-      logger.error("🚫 Reminder error:", err);
-      return;
-    }
-    rows.forEach(row => {
-      bot.sendMessage(row.chat_id, `📬 Murojaat ID: ${row.id} hali kutilyapti.`);
-      bot.sendSticker(row.chat_id, ANIMATIONS.error);
-      logAction(row.chat_id, "send_reminder", `Sent reminder for complaint ${row.id}`);
-    });
-  });
-});
-
-// Weekly statistics
-cron.schedule('0 9 * * 1', () => {
-  const lastWeek = new Date();
-  lastWeek.setDate(lastWeek.getDate() - 7);
-  db.get(`SELECT COUNT(*) as count FROM complaints WHERE date(time) >= date(?)`, [lastWeek.toISOString().split('T')[0]], (err, row) => {
-    if (!err && row) {
-      const message = `📈 Haftalik hisobot:\n\n• Yangi murojaatlar: ${row.count}`;
-      bot.sendMessage(ADMIN_ID, message);
+      await workbook.xlsx.writeFile(fileName);
+      await bot.sendDocument(ADMIN_ID, fileName);
+      bot.sendMessage(ADMIN_ID, `📊 Har 3 kunda avtomatik xisobot: ${fileName}`);
       bot.sendSticker(ADMIN_ID, ANIMATIONS.success);
-      logAction(ADMIN_ID, "weekly_stats", "Sent weekly statistics");
+      fs.unlinkSync(fileName);
+      logger.info(`✅ Admin ${ADMIN_ID} uchun avto-xisobot yuborildi`);
+      logAction(ADMIN_ID, "auto_export_report", `Avto-xisobot ${fileName} yuborildi`);
+    } catch (err) {
+      logger.error("🚫 Avto-xisobot yuborishda xato:", err);
+      bot.sendMessage(ADMIN_ID, "🚫 Avto-xisobot yuklashda xato!");
+      bot.sendSticker(ADMIN_ID, ANIMATIONS.error);
     }
   });
 });
 
-// Schedule daily message to group twice a day (e.g., at 9:00 AM and 3:00 PM)
-cron.schedule('0 9,15 * * *', async () => {
-  const message = `Hurmatli fuqarolar!
-Endilikda murojaatlaringizni @QabulxonaBot_bot Telegram boti orqali yuborishingiz mumkin.
-Bu sizning murojaatingizni tezroq ko‘rib chiqish va hal qilishga yordam beradi.`;
-
-  try {
-    await bot.sendMessage(GROUP_ID, message);
-    logger.info(`✅ Scheduled message sent to group (${GROUP_ID}) at ${new Date().toLocaleString('uz-UZ')}`);
-    logAction(ADMIN_ID, "scheduled_message", "Sent scheduled group message");
-  } catch (err) {
-    logger.error(`🚫 Error sending scheduled message to group (${GROUP_ID}):`, err);
-    bot.sendMessage(ADMIN_ID, `🚫 Guruhga (${GROUP_ID}) avtomatik xabar yuborishda xato!`);
+// Broadcast tozalash
+function cleanupBroadcast(chatId) {
+  if (userSteps[chatId] === 'askBroadcast') {
+    delete userSteps[chatId];
+    delete userData[chatId].broadcastMessage;
   }
-});
-
-// Bot status monitoring
-cron.schedule('*/5 * * * *', () => {
-  const memoryUsage = process.memoryUsage();
-  const uptime = process.uptime();
-  const statusMessage = `🖥 Bot holati:\n\n` +
-    `• Ishlash vaqti: ${Math.floor(uptime / 3600)} soat ${Math.floor((uptime % 3600) / 60)} daqiqa\n` +
-    `• Xotira: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`;
-  bot.sendMessage(ADMIN_ID, statusMessage);
-  logAction(ADMIN_ID, "bot_status", "Sent bot status report");
-});
-
-// Cleanup user data
-function cleanup(chatId) {
-  delete userSteps[chatId];
-  delete userData[chatId];
 }
 
-// Polling error handler
-bot.on('polling_error', (error) => {
-  logger.error('🚫 Polling error:', error);
+// Ma'lumotlarni tozalash
+function cleanupUserData(chatId) {
+  if (userSteps[chatId] && userSteps[chatId] !== 'askBroadcast') {
+    delete userSteps[chatId];
+    delete userData[chatId];
+  }
+}
+
+// Xatolarni ushlash
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('🚫 Unhandled Rejection at:', promise, 'reason:', reason);
+  bot.sendMessage(ADMIN_ID, `🚫 Kutilmagan xato yuz berdi: ${reason}`);
 });
 
-// Start bot
-logger.info("✅ Bot started...");
-console.log(chalk.green("✅ Bot started"));
+// Polling xatosi
+bot.on('polling_error', (error) => {
+  logger.error('🚫 Polling xatosi:', error);
+  bot.sendMessage(ADMIN_ID, `🚫 Polling xatosi: ${error.message}`);
+});
+
+// Bot ishga tushdi
+bot.on('polling', () => {
+  logger.info('✅ Bot ishga tushdi');
+  bot.sendMessage(ADMIN_ID, '✅ Bot muvaffaqiyatli ishga tushdi!');
+});
+
+// Statistikani ko‘rsatish uchun admin paneli
+bot.onText(/\/dashboard/, (msg) => {
+  const chatId = msg.chat.id;
+  if (chatId !== ADMIN_ID) {
+    bot.sendMessage(chatId, languages.uz.invalidCommand);
+    bot.sendSticker(chatId, ANIMATIONS.error);
+    return;
+  }
+  showAdminDashboard(chatId);
+});
+
+// Xatolar jurnalini ko‘rish
+bot.onText(/\/logs/, (msg) => {
+  const chatId = msg.chat.id;
+  if (chatId !== ADMIN_ID) {
+    bot.sendMessage(chatId, languages.uz.invalidCommand);
+    bot.sendSticker(chatId, ANIMATIONS.error);
+    return;
+  }
+  db.all("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 50", [], (err, rows) => {
+    if (err || !rows.length) {
+      bot.sendMessage(chatId, "🚫 Loglar topilmadi yoki xato yuz berdi!");
+      bot.sendSticker(chatId, ANIMATIONS.error);
+      return;
+    }
+    let message = "📜 *So‘nggi 50 ta harakat:*\n\n";
+    rows.forEach(row => {
+      message += `ID: ${row.id}\nFoydalanuvchi: ${row.user_id}\nHarakat: ${row.action}\nTafsilot: ${row.details}\nVaqt: ${row.timestamp}\n\n`;
+    });
+    bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+    bot.sendSticker(chatId, ANIMATIONS.success);
+    logAction(chatId, "view_logs", "Admin loglarni ko‘rdi");
+  });
+});
+
+// Botni to‘xtatish
+process.on('SIGINT', () => {
+  logger.info('🚪 Bot to‘xtatilmoqda...');
+  db.close(() => {
+    logger.info('✅ Ma\'lumotlar bazasi yopildi');
+    process.exit(0);
+  });
+});
+
+// Test uchun guruhga xabar yuborish
+bot.onText(/\/test/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (chatId !== ADMIN_ID) {
+    bot.sendMessage(chatId, languages.uz.invalidCommand);
+    bot.sendSticker(chatId, ANIMATIONS.error);
+    return;
+  }
+  try {
+    await bot.sendMessage(GROUP_ID, "📢 Test xabari: Bot ishlayapti!");
+    bot.sendMessage(chatId, "✅ Guruhga test xabari yuborildi!");
+    bot.sendSticker(chatId, ANIMATIONS.success);
+    logger.info(`✅ Admin ${chatId} tomonidan guruhga test xabari yuborildi`);
+    logAction(chatId, "test_message", "Guruhga test xabari yuborildi");
+  } catch (err) {
+    logger.error("🚫 Test xabari yuborishda xato:", err);
+    bot.sendMessage(chatId, "🚫 Guruhga test xabari yuborishda xato!");
+    bot.sendSticker(chatId, ANIMATIONS.error);
+  }
+});
